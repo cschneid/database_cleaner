@@ -8,7 +8,7 @@ module DatabaseCleaner
     def self.available_strategies
       %w[truncation transaction deletion]
     end
-    
+
     def self.config_file_location=(path)
       @config_file_location = path
     end
@@ -32,9 +32,9 @@ module DatabaseCleaner
       end
 
       def load_config
-        if File.file?(ActiveRecord.config_file_location)
+        if self.db != :default && File.file?(ActiveRecord.config_file_location)
           connection_details   = YAML::load(ERB.new(IO.read(ActiveRecord.config_file_location)).result)
-          self.connection_hash = connection_details[self.db.to_s]
+          @connection_hash = connection_details[self.db.to_s]
         end
       end
 
@@ -43,7 +43,7 @@ module DatabaseCleaner
       end
 
       def connection_klass
-        return ::ActiveRecord::Base if connection_hash.nil?
+        return ::ActiveRecord::Base unless connection_hash
         klass = create_connection_klass
         klass.send :establish_connection, connection_hash
         klass

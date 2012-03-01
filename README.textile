@@ -5,7 +5,7 @@ The original use case was to ensure a clean state during tests.  Each strategy
 is a small amount of code but is code that is usually needed in any ruby app
 that is testing with a database.
 
-ActiveRecord, DataMapper, MongoMapper, Mongoid, and CouchPotato are supported.
+ActiveRecord, DataMapper, Sequel, MongoMapper, Mongoid, and CouchPotato are supported.
 
 Here is an overview of the strategies supported for each library:
 
@@ -15,15 +15,19 @@ Here is an overview of the strategies supported for each library:
 | CouchPotato  | **Yes**        | No              | No             |
 | MongoMapper  | **Yes**        | No              | No             |
 | Mongoid      | **Yes**        | No              | No             |
+| Sequel       | **Yes**        | Yes             | No             |
 
 (Default strategy for each library is denoted in bold)
 
-The ActiveRecord @:deletion@ strategy is only useful for when the @:truncation@ strategy causes
-locks (as reported by some Oracle DB users).  The @:truncation@ strategy is the preferred option
-since it is much faster.
+The ActiveRecord @:deletion@ strategy is useful for when the @:truncation@ strategy causes
+locks (as reported by some Oracle DB users).  The @:deletion@ option has been reported to
+be faster than @:truncation@ in some cases as well.  In general, the best approach is to use
+@:transaction@ since it is the fastest.
 
-Database Cleaner also includes a @null@ strategy (that does no cleaning at all) which can be used 
+Database Cleaner also includes a @null@ strategy (that does no cleaning at all) which can be used
 with any ORM library. You can also explicitly use it by setting your strategy to @nil@.
+
+For support or to discuss development please use the "Google Group":http://groups.google.com/group/database_cleaner.
 
 h2. How to use
 
@@ -70,10 +74,10 @@ strategy the remaining time.  To accomplish this you can say:
   # then make the DatabaseCleaner.start and DatabaseCleaner.clean calls appropriately
 </pre>
 
-Example usage with RSpec:
+h3. RSpec Example
 
 <pre>
-Spec::Runner.configure do |config|
+RSpec.configure do |config|
 
   config.before(:suite) do
     DatabaseCleaner.strategy = :transaction
@@ -91,7 +95,38 @@ Spec::Runner.configure do |config|
 end
 </pre>
 
-For use in Cucumber please see the section below.
+h3. Cucumber Example
+
+Add this to your features/support/env.rb file:
+
+<pre>
+begin
+  require 'database_cleaner'
+  require 'database_cleaner/cucumber'
+  DatabaseCleaner.strategy = :truncation
+rescue NameError
+  raise "You need to add database_cleaner to your Gemfile (in the :test group) if you wish to use it."
+end
+</pre>
+
+A good idea is to create the before and after hooks to use the DatabaseCleaner.start and DatabaseCleaner.clean methods.
+
+Inside features/support/hooks.rb:
+
+<pre>
+Before do
+  DatabaseCleaner.start
+end
+
+After do |scenario|
+  DatabaseCleaner.clean
+end
+</pre>
+
+This should cover the basics of tear down between scenarios and keeping your database clean.
+For more examples see the section "Why?"
+
+h2. Common Errors
 
 In rare cases DatabaseCleaner will encounter errors that it will log.  By default it uses STDOUT set to the ERROR level but you can configure this to use whatever Logger you desire.  Here's an example of using the Rails.logger in env.rb:
 
@@ -99,6 +134,12 @@ In rare cases DatabaseCleaner will encounter errors that it will log.  By defaul
   DatabaseCleaner.logger = Rails.logger
 </pre>
 
+If you are using Postgres and have foreign key constraints, the truncation strategy will cause a lot of extra noise to appear on STDERR (in
+the form of "NOTICE truncate cascades" messages). To silence these warnings set the following log level in your postgresql.conf file:
+
+<pre>
+  client_min_messages = warning
+</pre>
 
 h2. How to use with multiple ORM's
 
@@ -108,7 +149,7 @@ Sometimes you need to use multiple ORMs in your application. You can use Databas
   #How to specify particular orms
   DatabaseCleaner[:active_record].strategy = :transaction
   DatabaseCleaner[:mongo_mapper].strategy = :truncation
-  
+
   #How to specify particular connections
   DatabaseCleaner[:active_record,{:connection => :two}]
 </pre>
@@ -124,6 +165,7 @@ Configuration options
 | Mongo Mapper  | DatabaseCleaner[:mongo_mapper]  | Multiple connections not yet supported                                   |
 | Mongoid       | DatabaseCleaner[:mongoid]       | Multiple connections not yet supported                                   |
 | Couch Potato  | DatabaseCleaner[:couch_potato]  | Multiple connections not yet supported                                   |
+| Sequel        | DatabaseCleaner[:sequel]        | ?                                                                        |
 
 h2. Why?
 
